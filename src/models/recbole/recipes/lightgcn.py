@@ -54,8 +54,16 @@ class LightGCNRecipe(RecBoleRecipeBase):
         if mcfg:
             overrides.update(dict(mcfg))
 
-        # 유저 override (마지막)
+        # 유저 config merge (마지막)
+        recbole_cfg = getattr(self.cfg.recbole, "config", None)
+        if recbole_cfg:
+            overrides.update(dict(recbole_cfg))
 
+        user_over = getattr(self.cfg.recbole, "overrides", None)
+        if user_over:
+            overrides.update(dict(user_over))
+
+        # 흔한 실수 방어: train_neg_sample_args를 list로 주는 케이스 정규화
         tna = overrides.get("train_neg_sample_args")
         if isinstance(tna, list):
             # 흔한 케이스: [{'distribution': 'uniform', 'sample_num': 5}]
@@ -63,14 +71,5 @@ class LightGCNRecipe(RecBoleRecipeBase):
                 overrides["train_neg_sample_args"] = tna[0]
             else:
                 raise ValueError(f"train_neg_sample_args must be dict, got list: {tna}")
-
-        overrides.update({
-            "eval_args": {
-                "group_by": "user",
-                "order": "RO",
-                "mode": "full",
-            },
-            "topk": 10,
-        })
 
         return overrides

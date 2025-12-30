@@ -63,6 +63,20 @@ def build(cfg: Any) -> TorchRecipeBase:
 class S3RecFinetuneRecipe(TorchRecipeBase):
     """S3Rec finetune 레시피 구현체(Contract는 모듈 docstring 참조)."""
 
+    def __init__(self, cfg: Any):
+        super().__init__(cfg)
+        # masking strategy for seen items during prediction
+        # - "full": mask full history from pipeline meta (submission-friendly)
+        # - "input": mask only items present in input_ids (validation-friendly; won't hide GT)
+        self._mask_seen_strategy: str = "full"
+        self._seen_items_by_index_full: list[list[int]] | None = None
+
+    def set_mask_seen_strategy(self, strategy: str) -> None:
+        strategy = str(strategy)
+        if strategy not in {"full", "input"}:
+            raise ValueError(f"Unknown mask strategy: {strategy}")
+        self._mask_seen_strategy = strategy
+
     def build_model(self, cfg, bundle):
         mcfg = self.model_cfg()
         _, seqs, max_item = _build_sequences(bundle)
@@ -118,14 +132,16 @@ class S3RecFinetuneRecipe(TorchRecipeBase):
         nw = int(getattr(tc, "num_workers", 0) or 0)
 
         train_ds = SASRecDataset(user_seqs=seqs, max_len=max_len, item_size=item_size, data_type="train")
+        valid_ds = SASRecDataset(user_seqs=seqs, max_len=max_len, item_size=item_size, data_type="valid")
         sub_ds = SASRecDataset(user_seqs=seqs, max_len=max_len, item_size=item_size, data_type="submission")
 
-        # for inference-time masking: keep full seen-items per user index
+        # for submission-time masking: keep full seen-items per user index
         # index in dataset == position in `users_order`
-        self._seen_items_by_index = seqs
+        self._seen_items_by_index_full = seqs
 
         return {
             "train": DataLoader(train_ds, batch_size=bs, shuffle=True, num_workers=nw, drop_last=False),
+            "valid": DataLoader(valid_ds, batch_size=bs, shuffle=False, num_workers=nw, drop_last=False),
             "test": DataLoader(sub_ds, batch_size=bs, shuffle=False, num_workers=nw, drop_last=False),
         }
 
@@ -150,18 +166,27 @@ class S3RecFinetuneRecipe(TorchRecipeBase):
         rating_pred[:, 0] = -1e9
         rating_pred[:, model.args.mask_id] = -1e9
 
-        # mask seen items (submission: full history)
-        # 정확한 방식: user index -> full sequence (pipeline meta 기반)로 마스킹
-        # NOTE: num_workers>0에서도 predict_step은 메인 프로세스에서 수행되므로 state 접근 OK.
-        seen_bank = getattr(self, "_seen_items_by_index", None) or []
-        for i in range(input_ids.size(0)):
-            uid = int(user_ids[i].detach().cpu().item())
-            if 0 <= uid < len(seen_bank):
-                seen_list = seen_bank[uid] or []
-                # filter invalid ids (padding/overflow)
-                for it in seen_list:
-                    if 0 < int(it) < rating_pred.size(1):
-                        rating_pred[i, int(it)] = -1e9
+        # mask seen items
+        # - submission: prefer full history masking
+        # - validation: mask only input history so GT item isn't hidden
+        if getattr(self, "_mask_seen_strategy", "full") == "full":
+            seen_bank = self._seen_items_by_index_full or []
+            for i in range(input_ids.size(0)):
+                uid = int(user_ids[i].detach().cpu().item())
+                if 0 <= uid < len(seen_bank):
+                    seen_list = seen_bank[uid] or []
+                    for it in seen_list:
+                        it = int(it)
+                        if 0 < it < rating_pred.size(1):
+                            rating_pred[i, it] = -1e9
+        else:
+            # mask from input_ids only (non-zero)
+            for i in range(input_ids.size(0)):
+                seen = input_ids[i].detach().cpu().tolist()
+                for it in seen:
+                    it = int(it)
+                    if 0 < it < rating_pred.size(1):
+                        rating_pred[i, it] = -1e9
 
         # topK
         k = 10

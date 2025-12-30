@@ -7,3 +7,4 @@ nltk
 catboost
 torch
 torchvision
+recbole

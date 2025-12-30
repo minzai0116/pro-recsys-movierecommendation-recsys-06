@@ -53,18 +53,12 @@ class RecVAERecipe(RecBoleRecipeBase):
         if mcfg:
             overrides.update(dict(mcfg))
 
-        # 유저 override merge (마지막)
+        # 유저 config merge (마지막)
+        recbole_cfg = getattr(self.cfg.recbole, "config", None)
+        if recbole_cfg:
+            overrides.update(dict(recbole_cfg))
+
         user_over = getattr(self.cfg.recbole, "overrides", None)
         if user_over:
             overrides.update(dict(user_over))
-
-        # overrides.pop("train_neg_sample_args", None)
-        overrides.update({
-            "eval_args": {
-                "group_by": "user",
-                "order": "RO",
-                "mode": "full",
-            },
-            "topk": int(getattr(tcfg, "topk", 10)),
-        })
         return overrides

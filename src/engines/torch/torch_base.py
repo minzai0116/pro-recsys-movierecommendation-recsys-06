@@ -125,10 +125,104 @@ class TorchBaseEngine(EngineBase):
                 metrics["epoch"] = epoch
                 self.logger.log_train_metrics(metrics, step=epoch)
 
+            # optional: validation
+            if self._should_run_valid(epoch, epochs, loaders):
+                valid_metrics = self._eval_seq_topn_valid(loaders["valid"], epoch=epoch)
+                if self.logger and valid_metrics:
+                    self.logger.log_valid_metrics(valid_metrics, step=epoch)
+
             self._save_checkpoint(epoch)
 
         # main.py contract: fit() returns dict with checkpoint_path
         return {"checkpoint_path": f"{self.setting.run_dir}/last.pt"}
+
+    # ---------------- validation helpers ----------------
+    def _should_run_valid(self, epoch: int, epochs: int, loaders: dict) -> bool:
+        # enabled by cfg.train.eval_each_epoch (default: False)
+        tc = getattr(self.cfg, "train", None)
+        enabled = False
+        every = 1
+        try:
+            enabled = bool(getattr(tc, "eval_each_epoch"))
+        except Exception:
+            enabled = bool(self.cfg.get("train", {}).get("eval_each_epoch", False))
+        if not enabled:
+            return False
+        if "valid" not in loaders:
+            return False
+        try:
+            every = int(getattr(tc, "eval_every", 1))
+        except Exception:
+            try:
+                every = int(self.cfg.get("train", {}).get("eval_every", 1))
+            except Exception:
+                every = 1
+        every = max(1, every)
+        return (epoch % every) == 0 or epoch == (epochs - 1)
+
+    def _eval_seq_topn_valid(self, valid_loader, *, epoch: int) -> dict:
+        """
+        Validation for seq_topn torch recipes.
+        Assumes batch shape: (user_id, input_ids, target_pos, target_neg, answer)
+        and recipe.predict_step returns List[List[int]].
+        """
+        # only meaningful for seq_topn
+        schema = getattr(valid_loader, "dataset", None)
+        _ = schema  # silence linters; dataset shape is checked implicitly
+
+        # choose K from cfg.train.topk (fallback 10)
+        k = 10
+        try:
+            k = int(self.cfg.get("train", {}).get("topk", 10))
+        except Exception:
+            k = 10
+
+        # temporarily switch masking strategy so GT isn't hidden
+        restore_strategy = None
+        if hasattr(self.recipe, "_mask_seen_strategy"):
+            try:
+                restore_strategy = getattr(self.recipe, "_mask_seen_strategy")
+            except Exception:
+                restore_strategy = None
+        if hasattr(self.recipe, "set_mask_seen_strategy"):
+            try:
+                self.recipe.set_mask_seen_strategy("input")
+            except Exception:
+                pass
+
+        self.model.eval()
+        hits = 0
+        total = 0
+        with torch.no_grad():
+            for batch in valid_loader:
+                batch = self.recipe.move_batch_to_device(batch, self.device)
+                # unpack answer
+                try:
+                    answer = batch[-1]  # [B, 1]
+                except Exception:
+                    answer = None
+                preds = self.recipe.predict_step(self.cfg, batch, self.model)
+                if answer is None:
+                    continue
+                ans = answer.detach().cpu().view(-1).tolist()
+                for a, row in zip(ans, preds):
+                    a = int(a)
+                    if a <= 0:
+                        continue
+                    total += 1
+                    if a in row[:k]:
+                        hits += 1
+
+        # restore
+        if restore_strategy is not None and hasattr(self.recipe, "set_mask_seen_strategy"):
+            try:
+                self.recipe.set_mask_seen_strategy(str(restore_strategy))
+            except Exception:
+                pass
+
+        if total <= 0:
+            return {"epoch": epoch, f"Recall@{k}": 0.0, "valid_total": 0}
+        return {"epoch": epoch, f"Recall@{k}": hits / total, "valid_total": total}
 
     def predict(self, bundle, checkpoint: str | None = None):
         loaders = self.recipe.build_loaders(self.cfg, bundle)

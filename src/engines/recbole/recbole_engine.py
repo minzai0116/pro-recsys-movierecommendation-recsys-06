@@ -245,19 +245,81 @@ class RecBoleEngine(EngineBase):
             pass
 
         # 6) full-sort TopK 추천
+        # - RecBole 내부 history 마스킹이 split 설정에 따라 불안정할 수 있어,
+        #   후처리에서 seen-item을 한번 더 제거할 수 있도록 k를 넉넉히 뽑는다.
+        # - 너무 작게 뽑으면(seen 필터링 후) k를 못 채워 submission row 수가 줄어들 수 있으니
+        #   item 수가 수천 단위일 때 1~2k 정도는 여유로 가져간다.
+        item_num = int(getattr(dataset, "item_num", 0) or 0)
+        k_fetch = max(int(k) * 50, 2000)
+        if item_num > 0:
+            k_fetch = min(k_fetch, max(item_num - 1, 1))
         topk_item_tokens = self.runner.fullsort_topk(
             dataset=dataset,
             eval_data=test_data,
             model=model,
             user_tokens=user_tokens,
-            k=k,
+            k=k_fetch,
             device=str(config["device"]),
         )
 
-        # 7) token -> int 변환 (문제 제출 포맷이 int item_id를 기대하는 경우가 대부분)
-        preds = []
-        for row in topk_item_tokens:
-            preds.append([int(x) for x in row])
+        # 7) safety: seen-item 제거 (train 데이터 기준)
+        # - split이 [1,0,0]처럼 valid/test가 없을 때, RecBole 마스킹이 깨지면
+        #   제출 추천에 이미 본 아이템이 대량 포함되어 성능이 폭망할 수 있음.
+        # - 따라서 최종 제출 직전에 train 기준으로 한번 더 필터링한다.
+        preds: List[List[int]] = []
+        try:
+            import pandas as pd  # noqa: F401
+
+            schema = bundle.schema or {}
+            ucol = str(schema.get("user_col", "user"))
+            icol = str(schema.get("item_col", "item"))
+
+            # submission users는 pipeline에서 int로 만들지만, 방어적으로 int 캐스팅
+            user_ids = [int(u) for u in user_tokens]
+            train_df = bundle.train
+            if train_df is None:
+                raise ValueError("bundle.train is required for seen-item filtering.")
+
+            # submission users만 추려서 seen set 구성 (메모리/시간 절약)
+            sub_df = train_df.loc[train_df[ucol].isin(user_ids), [ucol, icol]]
+            seen_map = (
+                sub_df.groupby(ucol)[icol]
+                .apply(lambda s: set(int(x) for x in s.values))
+                .to_dict()
+            )
+
+            # fill용 인기 아이템(최후의 안전장치)
+            popular_items = (
+                train_df[icol].value_counts().index.astype(int).tolist()
+                if icol in train_df.columns
+                else []
+            )
+
+            for u, row in zip(user_ids, topk_item_tokens):
+                seen = seen_map.get(u, set())
+                out: List[int] = []
+                for x in row:
+                    xi = int(x)
+                    if xi in seen:
+                        continue
+                    out.append(xi)
+                    if len(out) >= k:
+                        break
+                # k를 못 채우는 경우(유저가 상호작용이 매우 많거나) 인기 아이템으로 채워서 항상 k개 보장
+                if len(out) < k and popular_items:
+                    for xi in popular_items:
+                        if xi in seen:
+                            continue
+                        if xi in out:
+                            continue
+                        out.append(int(xi))
+                        if len(out) >= k:
+                            break
+                preds.append(out)
+        except Exception:
+            # fallback: 최소한 타입 변환만 수행
+            for row in topk_item_tokens:
+                preds.append([int(x) for x in row[:k]])
 
         self.logger.log_predict_info({
             "engine": "recbole",
