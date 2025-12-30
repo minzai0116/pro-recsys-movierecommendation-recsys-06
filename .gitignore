@@ -47,3 +47,6 @@ Thumbs.db
 # 로그
 *.log
 logs/
+log_tensorboard/EASE-rrs-Dec-30-2025_06-37-24-bd56cb/events.out.tfevents.1767076704.instance-17779.1825488.0
+log_tensorboard/EASE-rrs-Dec-30-2025_06-37-24-bd56cb/events.out.tfevents.1767076791.instance-17779.1825488.2
+log_tensorboard/EASE-rrs-Dec-30-2025_06-37-24-bd56cb/1767076727.257077/events.out.tfevents.1767076727.instance-17779.1825488.1
