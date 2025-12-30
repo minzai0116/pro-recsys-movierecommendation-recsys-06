@@ -1,0 +1,78 @@
+# --------------------
+# execution
+# --------------------
+predict: true
+checkpoint: ""
+seed: 42
+device: cuda
+verbose: true
+run_name: "recbole_EASE_seqtopn_train_only"
+
+wandb: true
+wandb_project: "movie-rec"
+memo: |
+
+  
+# --------------------
+# train / problem / data
+# --------------------
+train:
+  run_dir: "saved/runs"
+  submit_dir: "saved/submit"
+  seed: 42
+  epochs: 20
+  train_batch_size: 2048
+  eval_batch_size: 4096
+  learning_rate: 0.001
+  topk: 10
+
+problem:
+  name: movies_seq_topn
+
+data:
+  pipeline: seq_topn_ml_v1
+
+dataset:
+  data_path: "data/movielens/train"
+  load_aux_tables: false
+
+# --------------------
+# engine
+# --------------------
+engine:
+  type: recbole
+
+# --------------------
+# model
+# --------------------
+model: EASE
+
+recbole:
+  dataset: rrs
+  work_dir: "saved/recbole_runs/recbole_EASE_seqtopn_train_only"
+  # RecBole Config는 여기에서 결정 (권장)
+  config:
+    # train-only: 전체 데이터를 train으로 사용
+    eval_args:
+      split:
+        # Train/Valid 비율(카운트 기준):
+        # - Train: 4,840,871
+        # - Valid:   313,600
+        # => RS = [1.0, 0.0, 0.0] (test 없음)
+        RS: [1.0, 0.0, 0.0]
+      group_by: user
+      order: RO
+      # full-sort 추천을 위해 full 유지
+      mode:
+        valid: full
+        test: full
+  # (호환) overrides도 그대로 지원: config 위에 마지막으로 merge됨
+  overrides:
+    use_gpu: true
+    gpu_id: 0
+
+model_args:
+  EASE:
+    reg_weight: 100.0
+
+
