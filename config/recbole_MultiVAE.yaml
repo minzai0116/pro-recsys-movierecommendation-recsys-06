@@ -23,16 +23,20 @@ train:
   train_batch_size: 2048
   eval_batch_size: 4096
   learning_rate: 0.001
-  topk: 10
+  # 후보 생성용 Top-K (CatBoost 재랭킹 입력)
+  topk: 100
 
 problem:
   name: movies_seq_topn
 
 data:
-  pipeline: seq_topn_ml_v1
+  pipeline: random_masked_ml_v1 # 랜덤 마스킹 스플릿을 캐시로 고정(모델 간 동일 분리 보장)
 
 dataset:
   data_path: "data/movielens/train"
+  cache_dir: "saved/data"
+  cache_name: "fixed_random_split_v1.pkl"
+  mask_ratio: 0.1
   load_aux_tables: false
 
 # --------------------
