@@ -163,6 +163,10 @@ class CatBoostRankerRecipe(SklearnRegressionRecipeSpec):
             data_dir=data_dir,
             verbose=True
         )
+
+        # 제출/평가 관점에서 가장 중요한 규칙:
+        # - 유저가 train에서 이미 본 아이템은 추천에 포함되면 안 됨(치명적)
+        seen_pairs = set(zip(bundle.train[user_col], bundle.train[item_col]))
         
         exclude_cols = ['group_id', 'group', user_col, 'label', item_col, 'user_last_time', 'time']
         feature_cols = [c for c in test_df.columns if c not in exclude_cols]
@@ -186,12 +190,57 @@ class CatBoostRankerRecipe(SklearnRegressionRecipeSpec):
         sub_users = bundle.meta['submission']['users']
         user_groups = test_df_sorted.groupby(user_col)
         
+        # fallback: 인기 아이템(전체 유저 공통)으로 부족분 채우기
+        popular_items = (
+            bundle.train[item_col]
+            .value_counts()
+            .index
+            .to_list()
+        )
+
         preds: List[List[int]] = []
         for uid in sub_users:
             if uid in user_groups.groups:
                 grp = user_groups.get_group(uid)
-                top_items = grp.sort_values('score', ascending=False).head(k)[item_col].tolist()
-                preds.append(top_items)
+                # 점수순으로 훑되, (1) train에서 본 아이템 제거 (2) 중복 제거
+                recs: List[int] = []
+                rec_set = set()
+                for it in grp.sort_values('score', ascending=False)[item_col].tolist():
+                    key = (uid, it)
+                    if key in seen_pairs:
+                        continue
+                    if it in rec_set:
+                        continue
+                    recs.append(it)
+                    rec_set.add(it)
+                    if len(recs) >= k:
+                        break
+
+                # 부족하면 인기 아이템으로 채움(역시 seen 제외)
+                if len(recs) < k:
+                    for it in popular_items:
+                        key = (uid, it)
+                        if key in seen_pairs:
+                            continue
+                        if it in rec_set:
+                            continue
+                        recs.append(it)
+                        rec_set.add(it)
+                        if len(recs) >= k:
+                            break
+
+                preds.append(recs[:k])
             else:
-                preds.append([]) 
+                # 후보가 없는 유저(드물지만)도 동일 규칙으로 인기 기반 fallback
+                recs: List[int] = []
+                rec_set = set()
+                for it in popular_items:
+                    key = (uid, it)
+                    if key in seen_pairs:
+                        continue
+                    recs.append(it)
+                    rec_set.add(it)
+                    if len(recs) >= k:
+                        break
+                preds.append(recs[:k])
         return preds
