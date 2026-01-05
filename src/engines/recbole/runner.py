@@ -54,6 +54,11 @@ class RecBoleRunner:
         from recbole.utils.enum_type import ModelType
 
         overrides = _normalize_recbole_config_dict(overrides)
+        
+        # SSoT: Centralized logging. Disable RecBole's default tensorboard to avoid extra folders.
+        overrides.setdefault("enable_tensorboard", False)
+        overrides.setdefault("enable_scaler", False) # Often causes extra logging
+        
         config = Config(model=model_name, dataset=dataset_name, config_dict=overrides)
 
         # seed / logger (RecBole 내부 logger는 보조)
