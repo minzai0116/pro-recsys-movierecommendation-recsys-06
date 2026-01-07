@@ -202,7 +202,7 @@ class RecBoleRunner:
         user_tokens: List[str],
         k: int,
         device: Optional[str] = None,
-    ) -> List[List[str]]:
+    ) -> Tuple[List[List[str]], List[List[float]]]: # [수정] 반환 타입 변경
         """
         외부 user token -> 외부 item token TopK
 
@@ -220,7 +220,8 @@ class RecBoleRunner:
         uid_arr = np.asarray(dataset.token2id(uid_field, user_tokens))
 
         # internal iid 반환
-        _, topk_iid = full_sort_topk(
+        # [수정] topk_score도 받습니다.
+        topk_score, topk_iid = full_sort_topk(
             uid_arr,
             model,
             eval_data,
@@ -231,7 +232,12 @@ class RecBoleRunner:
         # internal id -> external token
         topk_tokens = dataset.id2token(iid_field, topk_iid.cpu())
 
-        return [list(row) for row in topk_tokens]
+        # [수정] 점수(Tensor)를 리스트로 변환하여 함께 반환
+        # topk_score는 (Users, K) 형태의 Tensor입니다.
+        scores_list = topk_score.detach().cpu().numpy().tolist()
+        tokens_list = [list(row) for row in topk_tokens]
+
+        return tokens_list, scores_list
 
     # --------------------------------------------------
     # predict primitive B: pairwise score (향후용)
