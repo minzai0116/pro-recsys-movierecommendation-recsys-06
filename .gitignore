@@ -21,6 +21,8 @@ build/
 *.h5
 *.pth
 *.pt
+*.item
+*.inter
 /data/
 dataset/
 saved/
@@ -40,7 +42,7 @@ catboost_info/
 .idea/
 *.swp
 *.swo
-*.yaml
+# *.yaml
 *.yml
 
 # 로그

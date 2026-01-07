@@ -253,7 +253,8 @@ class RecBoleEngine(EngineBase):
         k_fetch = max(int(k) * 50, 2000)
         if item_num > 0:
             k_fetch = min(k_fetch, max(item_num - 1, 1))
-        topk_item_tokens = self.runner.fullsort_topk(
+        # 점수까지 받아오도록 수정
+        topk_item_tokens, topk_item_scores = self.runner.fullsort_topk(
             dataset=dataset,
             eval_data=test_data,
             model=model,
@@ -261,6 +262,12 @@ class RecBoleEngine(EngineBase):
             k=k_fetch,
             device=str(config["device"]),
         )
+
+        # 점수와 랭킹을 출력할지 결정
+        train_cfg = getattr(self.cfg, "train", None)
+        return_scores = False
+        if train_cfg:
+            return_scores = getattr(train_cfg, "return_scores", False)
 
         # 7) safety: seen-item 제거 (train 데이터 기준)
         # - split이 [1,0,0]처럼 valid/test가 없을 때, RecBole 마스킹이 깨지면
@@ -295,14 +302,24 @@ class RecBoleEngine(EngineBase):
                 else []
             )
 
-            for u, row in zip(user_ids, topk_item_tokens):
+            # 최소 점수
+            MIN_SCORE = -9999.0
+
+            for u, row_items, row_scores in zip(user_ids, topk_item_tokens, topk_item_scores):
                 seen = seen_map.get(u, set())
                 out: List[int] = []
-                for x in row:
-                    xi = int(x)
+                # 모델 추천 결과 처리
+                for item_token, score in zip(row_items, row_scores):
+                    xi = int(item_token)
                     if xi in seen:
                         continue
-                    out.append(xi)
+                    
+                    # 모드에 따라 데이터 형태 분기
+                    if return_scores:
+                        out.append((xi, float(score)))
+                    else:
+                        out.append(xi)
+
                     if len(out) >= k:
                         break
                 # k를 못 채우는 경우(유저가 상호작용이 매우 많거나) 인기 아이템으로 채워서 항상 k개 보장
@@ -310,16 +327,35 @@ class RecBoleEngine(EngineBase):
                     for xi in popular_items:
                         if xi in seen:
                             continue
-                        if xi in out:
+                        
+                        # 중복 체크 (데이터 형태에 따라 다르게 처리)
+                        if return_scores:
+                            existing_items = [x[0] for x in out]
+                        else:
+                            existing_items = out
+                            
+                        if xi in existing_items:
                             continue
-                        out.append(int(xi))
+                            
+                        # 데이터 추가
+                        if return_scores:
+                            out.append((int(xi), MIN_SCORE))
+                        else:
+                            out.append(int(xi))
+                            
                         if len(out) >= k:
                             break
                 preds.append(out)
-        except Exception:
-            # fallback: 최소한 타입 변환만 수행
-            for row in topk_item_tokens:
-                preds.append([int(x) for x in row[:k]])
+
+        except Exception as e:
+            self.logger.log_predict_info({"error": f"Filtering failed: {e}"})
+            # 에러 발생 시 Fallback도 형식 맞춤
+            preds = []
+            for items, scores in zip(topk_item_tokens, topk_item_scores):
+                if return_scores:
+                    preds.append([(int(x), float(s)) for x, s in zip(items[:k], scores[:k])])
+                else:
+                    preds.append([int(x) for x in items[:k]])
 
         self.logger.log_predict_info({
             "engine": "recbole",

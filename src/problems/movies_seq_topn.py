@@ -44,19 +44,36 @@ class MoviesSeqTopNProblem(ProblemBase):
 
         # validate_bundle에서 이미 meta['submission']['users']를 강제한다고 가정
         bundle_users = bundle.meta["submission"]["users"]
-
+        # 유저 수가 다르면 에러 대신 경고만 출력하고 함수 종료
         if len(preds) != len(bundle_users):
-            raise ValueError(
-                f"preds length mismatch: preds={len(preds)} users={len(bundle_users)}"
-            )
+            print(f"\n[Warning] 예측된 유저 수({len(preds)})가 전체 유저 수({len(bundle_users)})와 다릅니다.")
+            print("         LightGBM 학습용 데이터(Partial) 생성 중이라면 이 메시지는 정상입니다.")
+        
+        # 데이터 타입 자동 감지 (첫 번째 유저의 첫 번째 아이템 확인)
+        is_score_mode = False
+        if len(preds) > 0 and len(preds[0]) > 0:
+            first_item = preds[0][0]
+            if isinstance(first_item, (tuple, list)):
+                is_score_mode = True
 
         result = []
-        for idx, items in enumerate(preds):
-            u = bundle_users[idx]
-            for it in items:
-                result.append((u, it))
+        if is_score_mode:
+            # --- [Mode A] 점수/랭킹 포함 (Feature Engineering용) ---
+            for idx, user_preds in enumerate(preds):
+                u = bundle_users[idx]
+                for rank, (item, score) in enumerate(user_preds):
+                    result.append((u, item, rank + 1, score))
+            columns = ["user", "item", "rank", "score"]
+            
+        else:
+            # --- [Mode B] 기본 제출용 (item만 있음) ---
+            for idx, items in enumerate(preds):
+                u = bundle_users[idx]
+                for item in items:
+                    result.append((u, item))
+            columns = ["user", "item"]
 
-        sub_df = pd.DataFrame(result, columns=["user", "item"])
+        sub_df = pd.DataFrame(result, columns=columns)
         train_cfg = cfg.get("train", {})  # train 없으면 {}
         submit_dir = train_cfg.get("submit_dir", "saved/submit")
 
@@ -82,6 +99,12 @@ class MoviesSeqTopNProblem(ProblemBase):
         users = sub.get("users") or []
         user_seq = meta.get("user_seq") or {}
 
+        # 평가 함수도 타입 감지하여 처리
+        is_score_mode = False
+        if len(preds) > 0 and len(preds[0]) > 0:
+            if isinstance(preds[0][0], (tuple, list)):
+                is_score_mode = True
+
         if not users or not user_seq:
             return None
 
@@ -104,7 +127,15 @@ class MoviesSeqTopNProblem(ProblemBase):
             except Exception:
                 gt = gt
             total += 1
-            if gt in recs[:k]:
+
+            # 아이템 ID 추출
+            if is_score_mode:
+                # (item, score) 튜플에서 item만 꺼냄
+                rec_items = [x[0] for x in recs[:k]]
+            else:
+                rec_items = recs[:k]
+
+            if gt in rec_items:
                 hits += 1
 
         if total == 0:

@@ -1,0 +1,90 @@
+# --------------------
+# execution
+# --------------------
+predict: false
+checkpoint: ""
+seed: 42
+device: cuda
+verbose: true
+run_name: "recbole_BERT4Rec_seqtopn"
+
+wandb: false
+wandb_project:
+memo: | 
+# --------------------
+# problem / data
+# --------------------
+train:
+  run_dir: "saved/runs"
+  submit_dir: "saved/submit"
+  # train.* is the single source of truth (no recbole_train)
+  seed: 42
+  epochs: 1
+  train_batch_size: 2048
+  eval_batch_size: 4096
+  learning_rate: 0.001
+  topk: 100
+  return_scores: True # 점수와 랭킹까지 출력할 것인지 결정
+
+problem:
+  name: movies_seq_topn
+
+data:
+  # MoviesSeqTopNProblem이 cfg.data.pipeline 또는 cfg.problem.pipeline을 본다
+  pipeline: seq_topn_load_atomic   # 너가 올린 파이프라인 이름 기준
+  # pipeline이 내부에서 cfg.dataset.data_path를 요구하는 구조(ml_train_dir 로더)였음
+dataset:
+  data_path: "src/data"   # <- 여기만 실제 경로로 변경
+  load_aux_tables: false            # tsv 무시 (원하면 true로 바꿔도 LightGCN엔 불필요)
+
+# --------------------
+# engine
+# --------------------
+engine:
+  type: recbole              # 엔진 레지스트리 키가 "recbole"로 등록돼 있어야 함
+
+# --------------------
+# model
+# --------------------
+model: BERT4Rec
+
+# RecBole 공통
+recbole:
+  dataset: data
+  work_dir: "saved/recbole_runs/recbole_BERT4Rec_seqtopn"  # <- 실행별로 폴더 구분 권장
+  overrides:
+    use_gpu: true
+    gpu_id: 0
+    # --- Sequential Model 필수 설정 ---
+    MAX_ITEM_LIST_LENGTH: 50       # 시퀀스 최대 길이 (일반적으로 50 또는 200 사용)
+    loss_type: 'CE'                
+    train_neg_sample_args: null    # CE loss 사용 시, 학습 중 Negative Sampling을 끕니다.
+    
+    # (선택) 검증/테스트도 Full Sort(전체 순위) 방식을 쓰려면 아래도 null로 설정 권장
+    # RecBole 최신 버전은 CE일 때 자동으로 처리해주기도 하지만, 명시하는 것이 안전합니다.
+    valid_neg_sample_args: null
+    test_neg_sample_args: null
+    # -------------------------------
+    eval_args:
+      # LS: Last Split (마지막 꺼)
+      # valid_and_test: 한 개는 Test로, 그 전 한 개는 Valid로 뺌
+      split: {'LS': 'valid_and_test'} 
+      
+      # TO: Temporal Order (시간 순서 지키기)
+      order: TO
+      
+      # user: 유저 단위로 작업
+      group_by: user
+  # 필요하면 여기에 추가 override를 넣는다
+
+### NOTE: recbole_train(legacy) removed. Use train.* only.
+
+# 모델 하이퍼
+model_args:
+  BERT4Rec:
+    n_layers: 2               # 레이어 수 (데이터가 적으면 2, 많으면 4~8)
+    n_heads: 2                # 헤드 수
+    hidden_size: 64           # 임베딩 차원
+    inner_size: 256           # FFN 내부 차원 (보통 hidden_size * 4)
+    dropout_prob: 0.2         # 드롭아웃
+    mask_ratio: 0.2           # 마스킹 비율
