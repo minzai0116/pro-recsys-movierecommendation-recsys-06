@@ -1,0 +1,56 @@
+mode: train_predict
+checkpoint: ""
+
+seed: 42
+device: cuda
+verbose: true
+run_name: "torch_s3rec_seqtopn"
+
+wandb: true
+wandb_project:
+memo: |
+
+train:
+  run_dir: "saved/runs"
+  submit_dir: "saved/submit"
+  epochs: 20
+  batch_size: 256
+  lr: 0.001
+  weight_decay: 0.0
+  adam_beta1: 0.9
+  adam_beta2: 0.999
+  topk: 10
+  num_workers: 0
+  # (optional) set to a pretrain run's last.pt
+  # pretrained_checkpoint: "saved/runs/<run_id>_torch_S3Rec/last.pt"
+
+engine:
+  type: torch
+
+problem:
+  name: movies_seq_topn
+
+data:
+  pipeline: seq_topn_ml_v1
+
+dataset:
+  data_path: "data/movielens/train"
+  user_col: "user"
+  item_col: "item"
+  time_col: "time"
+  load_aux_tables: false
+
+recipe: s3rec_finetune
+model: S3Rec
+model_args:
+  S3Rec:
+    hidden_size: 64
+    num_hidden_layers: 2
+    num_attention_heads: 2
+    hidden_act: "gelu"
+    attention_probs_dropout_prob: 0.2
+    hidden_dropout_prob: 0.2
+    initializer_range: 0.02
+    max_seq_length: 50
+
+

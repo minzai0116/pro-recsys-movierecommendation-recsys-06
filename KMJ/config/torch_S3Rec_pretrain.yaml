@@ -1,0 +1,58 @@
+mode: pretrain
+checkpoint: ""
+
+seed: 42
+device: cuda
+verbose: true
+run_name: "torch_s3rec_pretrain"
+
+wandb: true
+wandb_project:
+memo: |
+
+train:
+  run_dir: "saved/runs"
+  epochs: 50          # pretrain epochs
+  batch_size: 512     # pretrain batch size
+  lr: 0.001
+  weight_decay: 0.0
+  adam_beta1: 0.9
+  adam_beta2: 0.999
+  num_workers: 0
+
+# recipe 전용 하이퍼파라미터는 train.*가 아니라 여기로 분리
+recipe_args:
+  # S3Rec pretrain-specific
+  mask_p: 0.2
+  aap_weight: 0.2
+  mip_weight: 1.0
+  map_weight: 1.0
+  sp_weight: 0.5
+
+engine:
+  type: torch
+
+problem:
+  name: movies_seq_topn
+
+data:
+  pipeline: seq_topn_ml_v1
+
+dataset:
+  data_path: "data/movielens/train"
+  load_aux_tables: false
+
+recipe: s3rec_pretrain
+model: S3Rec
+model_args:
+  S3Rec:
+    hidden_size: 64
+    num_hidden_layers: 2
+    num_attention_heads: 2
+    hidden_act: "gelu"
+    attention_probs_dropout_prob: 0.2
+    hidden_dropout_prob: 0.2
+    initializer_range: 0.02
+    max_seq_length: 50
+
+

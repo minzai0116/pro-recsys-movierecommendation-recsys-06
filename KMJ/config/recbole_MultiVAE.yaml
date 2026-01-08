@@ -1,0 +1,66 @@
+# --------------------
+# execution
+# --------------------
+predict: false
+checkpoint: ""
+seed: 42
+device: cuda
+verbose: true
+run_name: "recbole_MultiVAE_seqtopn"
+
+wandb: true
+wandb_project:
+memo: |
+
+# --------------------
+# train / problem / data
+# --------------------
+train:
+  run_dir: "saved/runs"
+  submit_dir: "saved/submit"
+  seed: 42
+  epochs: 200
+  train_batch_size: 2048
+  eval_batch_size: 4096
+  learning_rate: 0.001
+  # 후보 생성용 Top-K (CatBoost 재랭킹 입력)
+  topk: 100
+
+problem:
+  name: movies_seq_topn
+
+data:
+  pipeline: random_masked_ml_v1 # 랜덤 마스킹 스플릿을 캐시로 고정(모델 간 동일 분리 보장)
+
+dataset:
+  data_path: "data/movielens/train"
+  cache_dir: "saved/data"
+  cache_name: "fixed_random_split_v1.pkl"
+  mask_ratio: 0.1
+  load_aux_tables: false
+
+# --------------------
+# engine
+# --------------------
+engine:
+  type: recbole
+
+# --------------------
+# model
+# --------------------
+model: MultiVAE
+
+recbole:
+  dataset: rrs
+  work_dir: "saved/recbole_runs/recbole_MultiVAE_seqtopn"
+  overrides:
+    use_gpu: true
+    gpu_id: 0
+
+# 모델 하이퍼
+# - 여기 값들은 안전한 기본값만 둠(RecBole 기본값 사용).
+# - 본격 튜닝 시에는 RecBole 모델 파라미터 키에 맞춰 확장하세요.
+model_args:
+  MultiVAE: {}
+
+
