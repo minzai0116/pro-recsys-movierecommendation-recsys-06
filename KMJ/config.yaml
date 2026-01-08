@@ -1,0 +1,132 @@
+# EASE 모델 설정
+
+# 시드
+seed: 42
+
+# GPU/메모리 최적화 설정 (V100 32GB)
+gpu:
+  enabled: true  # GPU 사용 여부
+  device: "cuda"  # cuda 또는 cpu
+  memory_limit_gb: 25  # GPU 메모리 사용 한도 (GB)
+  mixed_precision: true  # Mixed Precision (FP16) 사용
+  cudnn_benchmark: true  # CuDNN 벤치마크 활성화 (속도 향상)
+  
+# 로그 설정
+logging:
+  max_lines: 100  # 최대 로그 줄 수
+  progress_bar_ncols: 80  # tqdm 너비
+  verbose_level: 1  # 0: 최소, 1: 보통, 2: 상세
+
+# 데이터
+data:
+  train_path: "../RecSys_RRS_Framework/data/train/train_ratings.csv"
+  test_path: "../RecSys_RRS_Framework/data/test/test_ratings.csv"  # 예측용 (없으면 sample_submission.csv 사용)
+  sample_submission_path: "../RecSys_RRS_Framework/data/eval/sample_submission.csv"  # Test 유저 목록 추출용
+  metadata_path: "../preprocessed_metadata_TF.csv"  # 메타데이터 경로 (TF-IDF 장르 포함)
+
+# Validation
+val_items_per_user: 10  # 사용자당 Validation 아이템 수 (마지막 1개 + 중간 dropout 9개)
+# 모든 사용자가 Train에 포함되고, 각 사용자의 시퀀스에서:
+# - 마지막 1개는 반드시 포함
+# - 나머지 9개는 중간에서 랜덤하게 선택 (실제 대회와 유사)
+# ⚠️ 이전 베이스라인(0.1895)과 동일한 평가 기준 유지
+#   - 이전에도 val_items_per_user=10이었으므로 기준 변경 없음
+#   - 시간 가중치 적용으로 인한 성능 저하를 해결해야 함
+
+
+# 모델
+model:
+  lambda_reg: 545.0  # 정규화 파라미터 (최적화 결과: 545.74) - 단일 EASE용 (deprecated)
+  ease_model_path: "models/ease_model.pkl"  # EASE 모델 저장 경로 (예측 시 재사용)
+
+# Multi-EASE 앙상블 설정 🔥
+multi_ease:
+  enabled: true  # Multi-EASE 사용 여부
+  lambda_values: [300, 800, 1500]  # Lambda 값 리스트 (Shot 1 개선)
+  model_dir: "models/multi_ease"  # 모델 저장 디렉토리
+  candidates_dir: "multi_ease_candidates"  # 후보 저장 디렉토리
+  k_per_model: 100  # 각 모델당 추출할 Top-K 후보 수
+  k_final: 200  # 병합 후 최종 후보 수 (유저당)
+
+# Multi-VAE 설정 (Shot 3) 🔥
+multi_vae:
+  enabled: true  # Multi-VAE 사용 여부
+  latent_dim: 200  # 잠재 공간 차원
+  encoder_dims: [600]  # Encoder 중간 레이어 차원
+  dropout: 0.5  # Dropout 비율
+  learning_rate: 0.001  # 학습률
+  batch_size: 1024  # 배치 크기 (GPU 최적화: 500 → 1024)
+  num_workers: 4  # DataLoader workers
+  pin_memory: true  # 메모리 고정 (GPU 전송 속도 향상)
+  epochs: 100  # 최대 에폭 수
+  anneal_cap: 0.2  # KL Annealing 상한
+  anneal_steps: 20000  # KL Annealing 스텝 수
+  k: 100  # Top-K 후보 개수
+  log_interval: 20  # 로그 출력 주기 (epoch)
+
+# 예측
+prediction:
+  batch_size: 1000  # 배치 크기
+  check_interval: 100  # 중간 Recall 계산 주기 (명)
+
+# 출력
+output:
+  submission_path: "submission.csv"
+
+# 옵션
+predict_test: true  # Test 예측 여부 (제출 파일 생성)
+retrain_on_full: true  # 전체 데이터로 재학습 여부
+
+# 하이퍼파라미터 최적화 (옵션)
+optimize_lambda: false  # Lambda 자동 최적화 여부
+optimization:
+  n_trials: 20  # 최적화 시도 횟수
+  timeout: null  # 최대 시간 (초, null이면 무제한)
+  lambda_min: 100.0  # Lambda 최소값
+  lambda_max: 500.0  # Lambda 최대값
+  use_log_scale: true  # 로그 스케일 사용 여부 (true면 로그 스케일, false면 선형 스케일)
+
+# WandB 설정
+wandb:
+  enabled: true  # WandB 로깅 활성화
+  project: "KMJ-movie-rec"
+  entity: "timesmoker-ronaldo-s-iron-discipline"
+  run_name: "2stage_catboost"
+  tags:  # 실험 태그
+    - 2stage
+    - catboost
+    - ranker
+  memo: |
+    2-Stage CatBoost Ranker 모델
+    - Stage 1: EASE (후보 생성, Top-100)
+    - Stage 2: CatBoost Ranker (리랭킹, Top-10)
+    - Expanding Window OOF 방식
+    - 피처 엔지니어링 (EASE 6개, Item/User/Interaction)
+
+# 2-Stage 모델 설정
+cross_score:
+  n_groups: 2  # 유저 그룹 개수 (2-Fold, 더 많은 데이터로 EASE 학습)
+  k: 200  # Top-K 후보 개수 (GPU 메모리 최적화를 위해 200으로 감소)
+  output_dir: "cross_scores"  # Cross-Score 저장 디렉토리
+
+feature_engineering:
+  rare_threshold: 3  # Rare 메타데이터 기준 (3회 미만 등장)
+
+ranker:
+  loss_function: "YetiRankPairwise"  # YetiRankPairwise: 순위 최적화 손실 함수
+  iterations: 2000  # 최대 반복 횟수
+  learning_rate: 0.01  # 학습률
+  depth: 6  # 트리 깊이
+  l2_leaf_reg: 2.0  # L2 정규화
+  early_stopping_rounds: 150  # 조기 종료 라운드
+  eval_period: 50  # Recall 계산 주기
+  model_path: "models/catboost_ranker.cbm"  # 모델 저장 경로
+  use_gpu: true  # GPU 사용 (YetiRankPairwise는 GPU 지원)
+  gpu_ram_part: 0.8  # GPU 메모리 사용 비율 (80%)
+  task_type: "GPU"  # GPU 또는 CPU
+
+
+# 후보 병합 설정 (Multi-EASE)
+candidate_merge:
+  k_final: 200  # 병합 후 최종 후보 수 (유저당) - multi_ease.k_final과 동일하게 유지
+
