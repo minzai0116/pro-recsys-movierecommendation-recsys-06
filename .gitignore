@@ -1,5 +1,55 @@
-.DS_Store
+
+# Python
 __pycache__/
-wandb/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
+
+# Jupyter
+.ipynb_checkpoints
+
+# 데이터 & 결과물
 *.csv
+*.pkl
+*.h5
+*.pth
+*.pt
+*.item
+*.inter
+/data/
+dataset/
+saved/
+submit/
+
+# 모델 체크포인트
+checkpoints/
+saved_models/
+outputs/
+runs/
+wandb/
+catboost_info/
+
+# 환경설정
+.env
+.vscode/
+.idea/
+*.swp
+*.swo
+# *.yaml
+*.yml
+
+# 로그
 *.log
+logs/
+log_tensorboard/
+
+# OS
+.DS_Store
+Thumbs.db
