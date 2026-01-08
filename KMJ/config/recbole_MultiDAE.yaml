@@ -1,0 +1,61 @@
+# --------------------
+# execution
+# --------------------
+predict: false
+checkpoint: ""
+seed: 42
+device: cuda
+verbose: true
+run_name: "recbole_MultiDAE_seqtopn"
+
+wandb: true
+wandb_project:
+memo: |
+
+# --------------------
+# train / problem / data
+# --------------------
+train:
+  run_dir: "saved/runs"
+  submit_dir: "saved/submit"
+  seed: 42
+  epochs: 200
+  train_batch_size: 2048
+  eval_batch_size: 4096
+  learning_rate: 0.001
+  topk: 10
+
+problem:
+  name: movies_seq_topn
+
+data:
+  pipeline: seq_topn_ml_v1
+
+dataset:
+  data_path: "data/movielens/train"
+  load_aux_tables: false
+
+# --------------------
+# engine
+# --------------------
+engine:
+  type: recbole
+
+# --------------------
+# model
+# --------------------
+model: MultiDAE
+
+recbole:
+  dataset: rrs
+  work_dir: "saved/recbole_runs/recbole_MultiDAE_seqtopn"
+  overrides:
+    use_gpu: true
+    gpu_id: 0
+
+# 모델 하이퍼 (필수 키 3개)
+model_args:
+  MultiDAE:
+    mlp_hidden_size: [600]   # hidden layer sizes (list)
+    latent_dimension: 200
+    dropout_prob: 0.5
