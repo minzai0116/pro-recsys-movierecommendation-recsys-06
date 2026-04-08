@@ -13,7 +13,7 @@ class SklearnTopNEngine(SklearnEngineBase):
     Task-family engine for Top-N / Seq-Top-N using sklearn-style (non-deep) models.
 
     Currently supports:
-      - cfg.model == "EASE_SciPy" : closed-form EASE using scipy/numpy (ported from KMJ/NewFrame)
+      - cfg.model == "EASE_SciPy" : closed-form EASE using scipy/numpy (ported from the experiments workspace)
 
     Output contract:
       - for schema.task in {"topn","seq_topn"}: preds is List[List[int]] with len == len(meta['submission']['users'])

@@ -1,4 +1,4 @@
-# NewFrame: EASE 추천 시스템
+# Movie Recommendation Experiments: EASE 추천 시스템
 
 ## 개요
 
@@ -105,7 +105,7 @@ optimize_lambda: false  # Lambda 자동 최적화 여부
 # WandB 설정
 wandb:
   enabled: true
-  project: "KMJ-movie-rec"
+  project: "movie-rec-experiments"
   entity: "timesmoker-ronaldo-s-iron-discipline"
   run_name: "ease_baseline"
 ```
@@ -175,7 +175,7 @@ scores = user_vector @ B  (벡터화된 행렬 곱셈)
 ## 파일 구조
 
 ```
-NewFrame/
+experiments/
 ├── src/
 │   ├── __init__.py
 │   ├── utils.py              # 시드 고정 등 유틸리티

@@ -3,7 +3,7 @@ from __future__ import annotations
 """
 EASE (Embarrassingly Shallow Autoencoders) - SciPy/Numpy implementation for Top-N.
 
-This is a direct port of `KMJ/NewFrame/src/ease.py` core math, adapted to Baseline contracts:
+This is a direct port of the EASE implementation from the experiments workspace, adapted to Baseline contracts:
 - input: user-item implicit feedback matrix (CSR, binary)
 - output: item-item weight matrix B (dense float32)
 
@@ -184,5 +184,4 @@ class EASEScipy:
             out.append(recs[:k])
 
         return out
-
 

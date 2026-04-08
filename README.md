@@ -88,7 +88,7 @@ pro-recsys-movierecommendation-recsys-06
 ├─ config/              # 모델별 실행 설정
 ├─ docs/                # 아키텍처, 설정, 실행 가이드
 ├─ src/                 # 공통 추천 프레임워크
-├─ KMJ/                 # 개인 실험/확장 코드
+├─ experiments/         # 실험용 확장 코드와 보조 실행 흐름
 ├─ main.py              # 실행 진입점
 └─ README.md
 ```

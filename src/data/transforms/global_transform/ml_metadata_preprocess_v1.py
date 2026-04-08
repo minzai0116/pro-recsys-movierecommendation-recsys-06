@@ -3,7 +3,7 @@ from __future__ import annotations
 """
 GlobalTransform: MovieLens style aux tables -> item metadata (+ optional global attribute encoding).
 
-이 모듈은 `KMJ/preprocess.ipynb`에서 하던 메타데이터 전처리를
+이 모듈은 `experiments` 워크스페이스에서 진행하던 메타데이터 전처리를
 RecSys_RRS_Baseline의 GlobalTransform 프레임워크로 옮긴 버전입니다.
 
 ## Input (raw dict contract)
@@ -304,5 +304,4 @@ class MLMetadataPreprocessV1(GlobalTransform):
             raw["attribute_size"] = vocab_size
 
         return raw
-
 

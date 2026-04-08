@@ -89,7 +89,7 @@ optimization:
 # WandB 설정
 wandb:
   enabled: true  # WandB 로깅 활성화
-  project: "KMJ-movie-rec"
+  project: "movie-rec-experiments"
   entity: "timesmoker-ronaldo-s-iron-discipline"
   run_name: "2stage_catboost"
   tags:  # 실험 태그
@@ -129,4 +129,3 @@ ranker:
 # 후보 병합 설정 (Multi-EASE)
 candidate_merge:
   k_final: 200  # 병합 후 최종 후보 수 (유저당) - multi_ease.k_final과 동일하게 유지
-
