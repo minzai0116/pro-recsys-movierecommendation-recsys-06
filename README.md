@@ -8,6 +8,13 @@
 
 > 네이버 부스트캠프에서 진행한 추천 시스템 프로젝트입니다.
 
+## 내 기여 (My Contribution)
+
+- 메타데이터 EDA를 수행하고 추천 성능 개선에 필요한 피처 후보를 정리했습니다.
+- `season`, `dayparting`, 장르 비율, 영화 인기도, 랭킹 기반 피처를 설계했습니다.
+- 감독/작가의 1:N 관계를 정제하고, 장르 TF-IDF를 활용해 메타데이터 표현을 개선했습니다.
+- EASE + Multi-VAE 후보 생성과 CatBoost Ranker 리랭킹을 연결한 2-Stage 추천 구조 설계에 기여했습니다.
+
 ## 1. Introduction
 
 ### 1.1. MovieLens 기반 영화 추천 시스템
